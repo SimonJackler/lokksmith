@@ -16,6 +16,7 @@
 package dev.lokksmith.crypto
 
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import dev.lokksmith.PlatformContext
 import java.security.KeyStore
@@ -40,7 +41,13 @@ actual constructor(
 
     actual suspend fun encrypt(dek: ByteArray): ByteArray {
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, getKek() ?: createKek())
+        try {
+            cipher.init(Cipher.ENCRYPT_MODE, getKek() ?: createKek())
+        } catch (e: KeyPermanentlyInvalidatedException) {
+            // The stored KEK exists but is no longer usable; replace it and retry.
+            keyStore.deleteEntry(keyAlias)
+            cipher.init(Cipher.ENCRYPT_MODE, createKek())
+        }
         val ciphertext = cipher.doFinal(dek)
         return cipher.iv + ciphertext
     }
