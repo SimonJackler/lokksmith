@@ -21,6 +21,7 @@ import dev.lokksmith.client.asId
 import dev.lokksmith.client.asKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -135,6 +136,23 @@ class SnapshotEncryptionTest {
             )
 
         assertNull(store.observe(key).firstOrNull())
+    }
+
+    @Test
+    fun `unreadable value can still be deleted`() = runTest {
+        val key = "key".asKey()
+        val persistence = PersistenceFake()
+        SnapshotStoreImpl(EncryptingPersistence(persistence, AesGcmSnapshotCipher { dek }), Json)
+            .set(key, newSnapshot(key))
+        val otherDek = ByteArray(32) { (it + 1).toByte() }
+        val store =
+            SnapshotStoreImpl(
+                EncryptingPersistence(persistence, AesGcmSnapshotCipher { otherDek }),
+                Json,
+            )
+
+        assertTrue(store.delete(key), "an unreadable entry should still be deletable")
+        assertFalse(key.value in persistence.memory.value, "the physical row should be gone")
     }
 }
 

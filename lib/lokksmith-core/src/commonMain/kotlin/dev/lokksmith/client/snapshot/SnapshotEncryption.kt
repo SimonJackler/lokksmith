@@ -145,9 +145,9 @@ internal class EncryptingPersistence(
         delegate.set(key, cipher.encrypt(snapshot))
     }
 
-    override suspend fun delete(key: Key) {
-        delegate.delete(key)
-    }
+    // Deletion works on physical presence, unlike [contains], which is readability: an entry that
+    // can no longer be decrypted must still be removable.
+    override suspend fun delete(key: Key): Boolean = delegate.delete(key)
 
     override suspend fun contains(key: Key): Boolean = get(key) != null
 
