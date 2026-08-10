@@ -44,26 +44,33 @@ actual constructor(
     private val mutex = Mutex()
     private var cipher: IvAuthenticatedCipher? = null
 
-    actual suspend fun encrypt(dek: ByteArray): ByteArray = cipher().encrypt(dek)
+    actual suspend fun encrypt(dek: ByteArray): ByteArray =
+        cipher(createIfMissing = true)!!.encrypt(dek)
 
-    actual suspend fun decrypt(wrapped: ByteArray): ByteArray = cipher().decrypt(wrapped)
+    actual suspend fun decrypt(wrapped: ByteArray): ByteArray? =
+        cipher(createIfMissing = false)?.let { runCatching { it.decrypt(wrapped) }.getOrNull() }
 
-    private suspend fun cipher(): IvAuthenticatedCipher =
-        cipher ?: mutex.withLock { cipher ?: buildCipher().also { cipher = it } }
-
-    private suspend fun buildCipher(): IvAuthenticatedCipher {
-        val kek = loadOrCreateKek()
-        val key = provider.get(AES.GCM).keyDecoder().decodeFromByteArray(AES.Key.Format.RAW, kek)
-        return key.cipher()
-    }
-
-    private fun loadOrCreateKek(): ByteArray {
-        localStorage.getItem(storageKey)?.let { stored ->
-            runCatching { Base64.decode(stored) }
-                .onSuccess {
-                    return it
+    private suspend fun cipher(createIfMissing: Boolean): IvAuthenticatedCipher? {
+        cipher?.let {
+            return it
+        }
+        return mutex.withLock {
+            cipher
+                ?: run {
+                    val kek = loadKek() ?: if (createIfMissing) createKek() else return@run null
+                    buildCipher(kek).also { cipher = it }
                 }
         }
+    }
+
+    private suspend fun buildCipher(kek: ByteArray): IvAuthenticatedCipher =
+        provider.get(AES.GCM).keyDecoder().decodeFromByteArray(AES.Key.Format.RAW, kek).cipher()
+
+    /** Reads the KEK from `localStorage`, or null if it is missing or not valid Base64. */
+    private fun loadKek(): ByteArray? =
+        localStorage.getItem(storageKey)?.let { runCatching { Base64.decode(it) }.getOrNull() }
+
+    private fun createKek(): ByteArray {
         val kek = random.nextBytes(KEK_SIZE_BYTES)
         localStorage.setItem(storageKey, Base64.encode(kek))
         return kek

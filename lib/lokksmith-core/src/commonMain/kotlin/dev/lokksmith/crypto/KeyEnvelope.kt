@@ -30,8 +30,12 @@ internal expect class KeyEnvelope(platformContext: PlatformContext, alias: Strin
     /**
      * Unwraps a value from [encrypt].
      *
-     * @throws Exception if the platform key is gone (e.g. cleared from secure storage) or the input
-     *   isn't a valid wrapped DEK. Treat this as key loss.
+     * @return the unwrapped DEK, or `null` when the platform key is definitively absent (never
+     *   created or cleared from secure storage) or [wrapped] cannot be unwrapped with the present
+     *   key. Both mean the DEK is unrecoverable and the caller should regenerate.
+     * @throws Exception if the platform key could not be read for a transient or unexpected reason
+     *   (e.g. secure storage temporarily unavailable). The caller must propagate this rather than
+     *   regenerate, so a still-valid wrapped DEK is never discarded on a transient failure.
      */
-    suspend fun decrypt(wrapped: ByteArray): ByteArray
+    suspend fun decrypt(wrapped: ByteArray): ByteArray?
 }

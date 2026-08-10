@@ -28,6 +28,7 @@ import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
@@ -111,6 +112,26 @@ class EnvelopeDekProviderJvmTest {
             "the corrupt value should have been replaced with a valid wrapped DEK",
         )
     }
+
+    @Test
+    fun `transient KEK read error propagates without discarding the wrapped DEK`() =
+        withStore { dir, keyStore ->
+            provider(dir, keyStore).getOrCreateDek()
+            val wrappedBefore = keyStore.data.first()[wrappedDekKey]
+            assertNotNull(wrappedBefore)
+
+            // KEK path exists but is unreadable (a directory) — a read error, not absence.
+            val kekFile = dir.resolve("$ALIAS.kek")
+            assertTrue(kekFile.delete())
+            assertTrue(kekFile.mkdir())
+
+            assertFailsWith<Exception> { provider(dir, keyStore).getOrCreateDek() }
+            assertEquals(
+                wrappedBefore,
+                keyStore.data.first()[wrappedDekKey],
+                "a transient failure must not overwrite the wrapped DEK",
+            )
+        }
 
     private fun provider(dir: File, keyStore: DataStore<Preferences>) =
         EnvelopeDekProvider(

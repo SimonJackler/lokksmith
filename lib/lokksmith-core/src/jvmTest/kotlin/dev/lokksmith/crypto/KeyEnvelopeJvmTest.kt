@@ -19,7 +19,9 @@ import dev.lokksmith.PlatformContext
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 
@@ -59,5 +61,29 @@ class KeyEnvelopeJvmTest {
         envelope(dir, alias = "myalias").encrypt(ByteArray(32))
 
         assertTrue(dir.resolve("myalias.kek").exists(), "expected KEK file to be created")
+    }
+
+    @Test
+    fun `decrypt returns null when the KEK is absent`() = runTest {
+        val dir = createTempDirectory().toFile()
+        val wrapped = envelope(dir).encrypt(ByteArray(32) { it.toByte() })
+        assertTrue(dir.resolve("test.kek").delete())
+
+        // A fresh envelope over the same directory: the KEK is gone, so decrypt signals regenerate.
+        assertNull(envelope(dir).decrypt(wrapped))
+    }
+
+    @Test
+    fun `decrypt propagates a KEK read error instead of returning null`() = runTest {
+        val dir = createTempDirectory().toFile()
+        val wrapped = envelope(dir).encrypt(ByteArray(32) { it.toByte() })
+
+        // Make the KEK path exist but be unreadable (a directory) — a transient-style read failure,
+        // not absence. It must propagate, never be swallowed into a regenerate signal.
+        val kekFile = dir.resolve("test.kek")
+        assertTrue(kekFile.delete())
+        assertTrue(kekFile.mkdir())
+
+        assertFailsWith<Exception> { envelope(dir).decrypt(wrapped) }
     }
 }

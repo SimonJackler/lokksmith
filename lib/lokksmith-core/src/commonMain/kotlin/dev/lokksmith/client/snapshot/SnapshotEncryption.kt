@@ -94,16 +94,17 @@ internal class EnvelopeDekProvider(
 
     private suspend fun load(): ByteArray {
         val stored = wrappedStore.data.first()[WrappedDekKey]
-        if (stored != null) {
-            runCatching { envelope.decrypt(Base64.decode(stored)) }
-                .onSuccess {
-                    return it
-                }
-            // KEK unavailable or wrapped DEK corrupt: fall through and regenerate.
+        val wrapped = stored?.let { runCatching { Base64.decode(it) }.getOrNull() }
+        if (wrapped != null) {
+            // null → KEK absent or wrapped DEK unrecoverable, so regenerate below. A thrown error
+            // (secure store transiently unavailable) propagates instead, so a still-valid wrapped
+            // DEK is never overwritten on a transient failure.
+            envelope.decrypt(wrapped)?.let {
+                return it
+            }
         }
         val newDek = random.nextBytes(DEK_SIZE_BYTES)
-        val wrapped = Base64.encode(envelope.encrypt(newDek))
-        wrappedStore.edit { it[WrappedDekKey] = wrapped }
+        wrappedStore.edit { it[WrappedDekKey] = Base64.encode(envelope.encrypt(newDek)) }
         return newDek
     }
 

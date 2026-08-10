@@ -40,27 +40,32 @@ actual constructor(
 
     actual suspend fun encrypt(dek: ByteArray): ByteArray {
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKek())
+        cipher.init(Cipher.ENCRYPT_MODE, getKek() ?: createKek())
         val ciphertext = cipher.doFinal(dek)
         return cipher.iv + ciphertext
     }
 
-    actual suspend fun decrypt(wrapped: ByteArray): ByteArray {
-        val iv = wrapped.copyOfRange(0, GCM_IV_LENGTH)
-        val ciphertext = wrapped.copyOfRange(GCM_IV_LENGTH, wrapped.size)
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(
-            Cipher.DECRYPT_MODE,
-            getOrCreateKek(),
-            GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv),
-        )
-        return cipher.doFinal(ciphertext)
+    actual suspend fun decrypt(wrapped: ByteArray): ByteArray? {
+        // A thrown keystore error while reading the KEK propagates (transient); only a genuinely
+        // absent key returns null so the caller regenerates.
+        val kek = getKek() ?: return null
+        return runCatching {
+                val iv = wrapped.copyOfRange(0, GCM_IV_LENGTH)
+                val ciphertext = wrapped.copyOfRange(GCM_IV_LENGTH, wrapped.size)
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.DECRYPT_MODE, kek, GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv))
+                cipher.doFinal(ciphertext)
+            }
+            .getOrNull()
     }
 
-    private fun getOrCreateKek(): SecretKey {
-        (keyStore.getEntry(keyAlias, null) as? KeyStore.SecretKeyEntry)?.let {
-            return it.secretKey
-        }
+    /**
+     * Returns the stored KEK, or null if the alias holds no secret key. A keystore error throws.
+     */
+    private fun getKek(): SecretKey? =
+        (keyStore.getEntry(keyAlias, null) as? KeyStore.SecretKeyEntry)?.secretKey
+
+    private fun createKek(): SecretKey {
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEY_STORE)
         generator.init(
             KeyGenParameterSpec.Builder(

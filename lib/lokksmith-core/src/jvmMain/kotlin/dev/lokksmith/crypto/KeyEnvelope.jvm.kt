@@ -44,22 +44,33 @@ actual constructor(
     private val mutex = Mutex()
     private var cipher: IvAuthenticatedCipher? = null
 
-    actual suspend fun encrypt(dek: ByteArray): ByteArray = cipher().encrypt(dek)
+    actual suspend fun encrypt(dek: ByteArray): ByteArray =
+        cipher(createIfMissing = true)!!.encrypt(dek)
 
-    actual suspend fun decrypt(wrapped: ByteArray): ByteArray = cipher().decrypt(wrapped)
+    actual suspend fun decrypt(wrapped: ByteArray): ByteArray? =
+        cipher(createIfMissing = false)?.let { runCatching { it.decrypt(wrapped) }.getOrNull() }
 
-    private suspend fun cipher(): IvAuthenticatedCipher =
-        cipher ?: mutex.withLock { cipher ?: buildCipher().also { cipher = it } }
-
-    private suspend fun buildCipher(): IvAuthenticatedCipher {
-        val kekBytes = loadOrCreateKek()
-        val key =
-            provider.get(AES.GCM).keyDecoder().decodeFromByteArray(AES.Key.Format.RAW, kekBytes)
-        return key.cipher()
+    private suspend fun cipher(createIfMissing: Boolean): IvAuthenticatedCipher? {
+        cipher?.let {
+            return it
+        }
+        return mutex.withLock {
+            cipher
+                ?: run {
+                    val kekBytes =
+                        loadKek() ?: if (createIfMissing) createKek() else return@run null
+                    buildCipher(kekBytes).also { cipher = it }
+                }
+        }
     }
 
-    private fun loadOrCreateKek(): ByteArray {
-        if (kekFile.exists()) return kekFile.readBytes()
+    private suspend fun buildCipher(kek: ByteArray): IvAuthenticatedCipher =
+        provider.get(AES.GCM).keyDecoder().decodeFromByteArray(AES.Key.Format.RAW, kek).cipher()
+
+    /** Reads the persisted KEK, or null if the file does not exist. A read error propagates. */
+    private fun loadKek(): ByteArray? = if (kekFile.exists()) kekFile.readBytes() else null
+
+    private fun createKek(): ByteArray {
         ensureSecureDirectory(dataDirectory.toPath())
         val kek = random.nextBytes(KEK_SIZE_BYTES)
         // Create the file owner-only where the platform supports POSIX permissions.

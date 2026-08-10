@@ -80,18 +80,27 @@ actual constructor(
     private val mutex = Mutex()
     private var cipher: IvAuthenticatedCipher? = null
 
-    actual suspend fun encrypt(dek: ByteArray): ByteArray = cipher().encrypt(dek)
+    actual suspend fun encrypt(dek: ByteArray): ByteArray =
+        cipher(createIfMissing = true)!!.encrypt(dek)
 
-    actual suspend fun decrypt(wrapped: ByteArray): ByteArray = cipher().decrypt(wrapped)
+    actual suspend fun decrypt(wrapped: ByteArray): ByteArray? =
+        cipher(createIfMissing = false)?.let { runCatching { it.decrypt(wrapped) }.getOrNull() }
 
-    private suspend fun cipher(): IvAuthenticatedCipher =
-        cipher ?: mutex.withLock { cipher ?: buildCipher().also { cipher = it } }
-
-    private suspend fun buildCipher(): IvAuthenticatedCipher {
-        val kek = loadKek() ?: createKek()
-        val key = provider.get(AES.GCM).keyDecoder().decodeFromByteArray(AES.Key.Format.RAW, kek)
-        return key.cipher()
+    private suspend fun cipher(createIfMissing: Boolean): IvAuthenticatedCipher? {
+        cipher?.let {
+            return it
+        }
+        return mutex.withLock {
+            cipher
+                ?: run {
+                    val kek = loadKek() ?: if (createIfMissing) createKek() else return@run null
+                    buildCipher(kek).also { cipher = it }
+                }
+        }
     }
+
+    private suspend fun buildCipher(kek: ByteArray): IvAuthenticatedCipher =
+        provider.get(AES.GCM).keyDecoder().decodeFromByteArray(AES.Key.Format.RAW, kek).cipher()
 
     private fun loadKek(): ByteArray? = memScoped {
         val query =
