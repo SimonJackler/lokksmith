@@ -53,8 +53,8 @@ actual constructor(
     }
 
     actual suspend fun decrypt(wrapped: ByteArray): ByteArray? {
-        // A thrown keystore error while reading the KEK propagates (transient); only a genuinely
-        // absent key returns null so the caller regenerates.
+        // A thrown keystore error while reading the KEK propagates (transient); only an absent key
+        // returns null so the caller regenerates.
         val kek = getKek() ?: return null
         return runCatching {
                 val iv = wrapped.copyOfRange(0, GCM_IV_LENGTH)

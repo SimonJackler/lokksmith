@@ -28,7 +28,8 @@ import kotlinx.coroutines.sync.withLock
 
 /**
  * Desktop [KeyEnvelope]. The key is a random AES-256 key saved as a file in the user-private data
- * directory. No hardware isolation here — it's only as safe as the folder's file permissions.
+ * directory. There is no hardware isolation; the key is only as safe as the folder's file
+ * permissions.
  */
 internal actual class KeyEnvelope
 actual constructor(

@@ -19,7 +19,7 @@ import dev.lokksmith.PlatformContext
 
 /**
  * Wraps and unwraps the data-encryption key (DEK) with a platform key kept in secure storage. Only
- * the wrapped DEK is ever persisted — the key-wrapping half of envelope encryption for
+ * the wrapped DEK is ever persisted. This is the key-wrapping half of envelope encryption for
  * [SnapshotCipher].
  */
 internal expect class KeyEnvelope(platformContext: PlatformContext, alias: String) {

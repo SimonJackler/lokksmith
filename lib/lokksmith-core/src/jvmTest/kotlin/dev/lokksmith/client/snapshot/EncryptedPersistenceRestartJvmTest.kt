@@ -47,8 +47,8 @@ import okio.Path.Companion.toPath
 
 /**
  * End-to-end test of the encrypted persistence stack assembled exactly as
- * [dev.lokksmith.ContainerImpl] does it — real DataStores, real [KeyEnvelope], real files — and
- * driven across a simulated process restart.
+ * [dev.lokksmith.ContainerImpl] does it (real DataStores, real [KeyEnvelope], real files), driven
+ * across a simulated process restart.
  *
  * A "restart" is modelled by tearing down a [Generation]'s DataStore scope (releasing the file
  * locks) and building a fresh [Generation] over the same directory. DataStore forbids two live

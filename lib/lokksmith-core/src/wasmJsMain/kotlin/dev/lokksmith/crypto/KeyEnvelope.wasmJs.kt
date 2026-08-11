@@ -28,8 +28,8 @@ import kotlinx.coroutines.sync.withLock
 /**
  * Web [KeyEnvelope]. The key is a random AES-256 key kept in the browser's `localStorage`.
  *
- * Heads up: a key in `localStorage` is really just obfuscation, not strong protection — any script
- * on the same origin can read it, so this doesn't stop XSS.
+ * A key in `localStorage` is obfuscation, not strong protection. Any script on the same origin can
+ * read it, so this does not defend against XSS.
  */
 internal actual class KeyEnvelope
 actual constructor(

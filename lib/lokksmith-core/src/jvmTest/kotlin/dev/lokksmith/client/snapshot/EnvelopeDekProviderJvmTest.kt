@@ -48,8 +48,8 @@ import okio.Path.Companion.toPath
  */
 class EnvelopeDekProviderJvmTest {
 
-    // Literal storage key mirrored from EnvelopeDekProvider (private there). Brittle by necessity —
-    // pins the on-disk contract.
+    // Literal storage key mirrored from EnvelopeDekProvider (private there). This is intentionally
+    // brittle: it pins the on-disk contract.
     private val wrappedDekKey = stringPreferencesKey("lokksmith.snapshot.wrappedDek")
 
     @Test
@@ -84,12 +84,12 @@ class EnvelopeDekProviderJvmTest {
     fun `lost KEK regenerates a new DEK`() = withStore { dir, keyStore ->
         val dek1 = provider(dir, keyStore).getOrCreateDek()
 
-        // Simulate KEK loss (e.g. secure store cleared). The next envelope mints a fresh KEK, so
-        // the stored wrapped DEK can no longer be unwrapped.
+        // Simulate KEK loss (e.g. secure store cleared). The next envelope generates a fresh KEK,
+        // so the stored wrapped DEK can no longer be unwrapped.
         assertTrue(dir.resolve("$ALIAS.kek").delete(), "KEK file should exist and be deletable")
         val dek2 = provider(dir, keyStore).getOrCreateDek()
 
-        // Any unwrap failure regenerates and discards the previous DEK — a transient failure would
+        // Any unwrap failure regenerates and discards the previous DEK. A transient failure would
         // do the same, losing all snapshots.
         assertFalse(dek1.contentEquals(dek2), "a lost KEK should force a new DEK")
         assertNotEquals(
@@ -120,7 +120,7 @@ class EnvelopeDekProviderJvmTest {
             val wrappedBefore = keyStore.data.first()[wrappedDekKey]
             assertNotNull(wrappedBefore)
 
-            // KEK path exists but is unreadable (a directory) — a read error, not absence.
+            // KEK path exists but is unreadable (a directory), which is a read error, not absence.
             val kekFile = dir.resolve("$ALIAS.kek")
             assertTrue(kekFile.delete())
             assertTrue(kekFile.mkdir())
@@ -141,8 +141,8 @@ class EnvelopeDekProviderJvmTest {
 
     /**
      * Runs [block] with a temp directory and a real DataStore for the wrapped DEK, tearing both
-     * down afterwards. Providers can share the single live [DataStore] instance — only
-     * cross-process restart needs a fresh one (see [EncryptedPersistenceRestartJvmTest]).
+     * down afterwards. Providers can share the single live [DataStore] instance; only cross-process
+     * restart needs a fresh one (see [EncryptedPersistenceRestartJvmTest]).
      */
     private fun withStore(block: suspend (dir: File, keyStore: DataStore<Preferences>) -> Unit) =
         runTest {

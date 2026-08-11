@@ -78,7 +78,7 @@ class KeyEnvelopeJvmTest {
         val dir = createTempDirectory().toFile()
         val wrapped = envelope(dir).encrypt(ByteArray(32) { it.toByte() })
 
-        // Make the KEK path exist but be unreadable (a directory) — a transient-style read failure,
+        // Make the KEK path exist but be unreadable (a directory): a transient-style read failure,
         // not absence. It must propagate, never be swallowed into a regenerate signal.
         val kekFile = dir.resolve("test.kek")
         assertTrue(kekFile.delete())

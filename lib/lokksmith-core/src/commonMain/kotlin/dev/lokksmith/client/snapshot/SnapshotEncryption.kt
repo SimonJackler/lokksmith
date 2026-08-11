@@ -42,8 +42,9 @@ internal interface SnapshotCipher {
 
 /**
  * Pass-through [SnapshotCipher] used when encryption is disabled: values are written as-is.
- * [decrypt] always fails so [EncryptingPersistence] falls back to its plaintext-JSON handling — a
- * valid snapshot is returned unchanged, while any value left over from an encrypted run (not
+ *
+ * [decrypt] always fails so that [EncryptingPersistence] falls back to its plaintext-JSON handling.
+ * A valid snapshot is then returned unchanged, while any value left over from an encrypted run (not
  * plaintext JSON) is treated as absent rather than surfaced as garbage.
  */
 internal object PlaintextSnapshotCipher : SnapshotCipher {
@@ -55,10 +56,11 @@ internal object PlaintextSnapshotCipher : SnapshotCipher {
 }
 
 /**
- * AES-GCM cipher for snapshots. The data-encryption key (DEK) comes from [dekProvider]; it's
+ * AES-GCM cipher for snapshots. The data-encryption key (DEK) comes from [dekProvider] and is
  * decoded once and cached. Every encryption uses a fresh random IV, so the stored value is
- * `Base64(IV || ciphertext || tag)`. The GCM tag makes [decrypt] fail on tampering or a wrong key —
- * which is how [EncryptingPersistence] tells encrypted data apart from legacy plaintext.
+ * `Base64(IV || ciphertext || tag)`. The GCM tag makes [decrypt] fail on tampering or a wrong key.
+ * [EncryptingPersistence] relies on that failure to tell encrypted data apart from legacy
+ * plaintext.
  */
 internal class AesGcmSnapshotCipher(
     private val provider: CryptographyProvider = CryptographyProvider.Default,
@@ -90,9 +92,9 @@ internal class AesGcmSnapshotCipher(
  * The store-wide data-encryption key (DEK), via envelope encryption.
  *
  * The DEK is generated once, wrapped with the platform key via [envelope], and the wrapped copy
- * kept in [wrappedStore]. Later runs just load and unwrap it. If unwrapping fails (e.g. the
- * platform key is gone), we mint a new DEK — snapshots under the old one become unreadable and are
- * treated as absent, so the user simply signs in again.
+ * kept in [wrappedStore]. Later runs load and unwrap it. If unwrapping fails, for example because
+ * the platform key is gone, a new DEK is generated. Snapshots under the old one become unreadable
+ * and are treated as absent, requiring the user to sign in again.
  */
 internal class EnvelopeDekProvider(
     private val envelope: KeyEnvelope,
@@ -110,9 +112,9 @@ internal class EnvelopeDekProvider(
         val stored = wrappedStore.data.first()[WrappedDekKey]
         val wrapped = stored?.let { runCatching { Base64.decode(it) }.getOrNull() }
         if (wrapped != null) {
-            // null → KEK absent or wrapped DEK unrecoverable, so regenerate below. A thrown error
-            // (secure store transiently unavailable) propagates instead, so a still-valid wrapped
-            // DEK is never overwritten on a transient failure.
+            // A null result means the KEK is absent or the wrapped DEK is unrecoverable, so it is
+            // regenerated below. A thrown error (secure store transiently unavailable) propagates
+            // instead, so a still-valid wrapped DEK is never overwritten on a transient failure.
             envelope.decrypt(wrapped)?.let {
                 return it
             }
@@ -132,11 +134,11 @@ internal class EnvelopeDekProvider(
  * A [Persistence] that encrypts on write and decrypts on read via [cipher].
  *
  * A read has three outcomes:
- * - decrypts fine → the plaintext,
- * - can't decrypt but looks like old plaintext JSON → returned as-is, then re-encrypted on the next
- *   write,
- * - can't decrypt and isn't plaintext (e.g. the key was lost) → treated as absent instead of
- *   crashing.
+ * - Decryption succeeds: the plaintext is returned.
+ * - Decryption fails but the value looks like legacy plaintext JSON: it is returned as-is and
+ *   re-encrypted on the next write.
+ * - Decryption fails and the value is not plaintext, for example after key loss: it is treated as
+ *   absent rather than surfaced as an error.
  */
 internal class EncryptingPersistence(
     private val delegate: Persistence,
@@ -160,8 +162,8 @@ internal class EncryptingPersistence(
         delegate.set(key, cipher.encrypt(snapshot))
     }
 
-    // Deletion works on physical presence, unlike [contains], which is readability: an entry that
-    // can no longer be decrypted must still be removable.
+    // Deletion works on physical presence, unlike [contains], which reflects readability: an entry
+    // that can no longer be decrypted must still be removable.
     override suspend fun delete(key: Key): Boolean = delegate.delete(key)
 
     override suspend fun contains(key: Key): Boolean = get(key) != null

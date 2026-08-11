@@ -111,9 +111,9 @@ actual constructor(
         val result = alloc<CFTypeRefVar>()
         val status = SecItemCopyMatching(query, result.ptr)
         CFRelease(query)
-        // Only a real "not found" means make a new key. Anything else (e.g. Keychain locked before
-        // first unlock) must throw — silently regenerating would orphan the wrapped DEK and make
-        // every stored snapshot unreadable.
+        // Only "not found" means a new key should be created. Anything else (e.g. Keychain locked
+        // before first unlock) must throw. Silently regenerating would orphan the wrapped DEK and
+        // make every stored snapshot unreadable.
         if (status == errSecItemNotFound) return null
         check(status == errSecSuccess) { "Keychain read failed with status $status" }
         @Suppress("UNCHECKED_CAST") val data = result.value as CFDataRef?
@@ -135,8 +135,8 @@ actual constructor(
         data?.let { CFRelease(it) }
         return when (status) {
             errSecSuccess -> kek
-            // Item already exists but our load missed it — re-read the stored key instead of
-            // returning this throwaway one that was never saved.
+            // The item already exists but the load above missed it. Re-read the stored key instead
+            // of returning this one, which was never saved.
             errSecDuplicateItem -> loadKek() ?: error("Keychain item exists but is unreadable")
             else -> error("Keychain write failed with status $status")
         }
@@ -160,7 +160,7 @@ actual constructor(
         CFDictionaryAddValue(dict, kSecAttrService, service)
         CFDictionaryAddValue(dict, kSecAttrAccount, account)
         extra.forEach { (key, value) -> CFDictionaryAddValue(dict, key, value) }
-        // The dictionary retains the keys/values; release our local references.
+        // The dictionary retains the keys/values; release the local references.
         account?.let { CFRelease(it) }
         service?.let { CFRelease(it) }
         return dict
