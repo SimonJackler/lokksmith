@@ -2,17 +2,11 @@
 
 Lokksmith encrypts its persisted state at rest. The snapshot that Lokksmith stores for each
 client — including access and refresh tokens, nonces and in-flight auth-flow state — is
-encrypted before it is written to disk (or `localStorage` on the Web), so tokens are never
-persisted in clear text.
+encrypted before it is written to disk (or `localStorage` on the Web), so by default tokens are
+never persisted in clear text.
 
-This is on by default and requires no configuration. It can be turned off with
-`Lokksmith.Options.encryptionEnabled = false`, in which case snapshots are stored as plaintext
-JSON and no platform key material is created.
-
-!!! warning "Changing the setting is not a migration"
-    `encryptionEnabled` is meant to be set once, before any state is persisted. Flipping it on an
-    existing installation does not convert stored data: state written in the other mode is treated
-    as absent, so the affected client is re-created and the user re-authenticates.
+This is on by default and requires no configuration. It can be turned off — see
+[Disabling encryption](#disabling-encryption).
 
 ## How it works
 
@@ -46,6 +40,27 @@ Where and how strongly the KEK is protected depends on the platform:
     snapshot can also read the KEK. Apply a strong Content Security Policy and the usual XSS
     defenses. Persisting a non-extractable [WebCrypto](https://developer.mozilla.org/docs/Web/API/Web_Crypto_API)
     key in IndexedDB is the intended future hardening.
+
+## Disabling encryption
+
+Set `encryptionEnabled = false` in the options passed to `createLokksmith(...)`. Snapshots are then
+stored as plaintext JSON and no platform key material is created:
+
+```kotlin
+val lokksmith = createLokksmith(
+    options = Lokksmith.Options(encryptionEnabled = false),
+)
+```
+
+The `options` argument is common to every platform's `createLokksmith(...)` — see
+[Creating a Lokksmith instance](getting-started/usage.md). Depending on the platform you also pass
+the other required arguments there (for example `dataDirectory` on Desktop, the `Context` on
+Android).
+
+!!! warning "Changing the setting is not a migration"
+    `encryptionEnabled` is meant to be set once, before any state is persisted. Flipping it on an
+    existing installation does not convert stored data: state written in the other mode is treated
+    as absent, so the affected client is re-created and the user re-authenticates.
 
 ## Upgrading existing installations
 
