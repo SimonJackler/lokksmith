@@ -5,7 +5,14 @@ client — including access and refresh tokens, nonces and in-flight auth-flow s
 encrypted before it is written to disk (or `localStorage` on the Web), so tokens are never
 persisted in clear text.
 
-This is fully automatic. There is no configuration to enable it and no API to call.
+This is on by default and requires no configuration. It can be turned off with
+`Lokksmith.Options.encryptionEnabled = false`, in which case snapshots are stored as plaintext
+JSON and no platform key material is created.
+
+!!! warning "Changing the setting is not a migration"
+    `encryptionEnabled` is meant to be set once, before any state is persisted. Flipping it on an
+    existing installation does not convert stored data: state written in the other mode is treated
+    as absent, so the affected client is re-created and the user re-authenticates.
 
 ## How it works
 

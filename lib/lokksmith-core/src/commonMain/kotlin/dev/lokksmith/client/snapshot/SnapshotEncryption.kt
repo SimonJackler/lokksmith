@@ -41,6 +41,20 @@ internal interface SnapshotCipher {
 }
 
 /**
+ * Pass-through [SnapshotCipher] used when encryption is disabled: values are written as-is.
+ * [decrypt] always fails so [EncryptingPersistence] falls back to its plaintext-JSON handling — a
+ * valid snapshot is returned unchanged, while any value left over from an encrypted run (not
+ * plaintext JSON) is treated as absent rather than surfaced as garbage.
+ */
+internal object PlaintextSnapshotCipher : SnapshotCipher {
+
+    override suspend fun encrypt(plaintext: String): String = plaintext
+
+    override suspend fun decrypt(value: String): String =
+        throw UnsupportedOperationException("encryption is disabled")
+}
+
+/**
  * AES-GCM cipher for snapshots. The data-encryption key (DEK) comes from [dekProvider]; it's
  * decoded once and cached. Every encryption uses a fresh random IV, so the stored value is
  * `Base64(IV || ciphertext || tag)`. The GCM tag makes [decrypt] fail on tampering or a wrong key —

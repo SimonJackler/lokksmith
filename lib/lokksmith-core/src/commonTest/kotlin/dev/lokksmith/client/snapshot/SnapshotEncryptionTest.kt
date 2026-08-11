@@ -154,6 +154,34 @@ class SnapshotEncryptionTest {
         assertTrue(store.delete(key), "an unreadable entry should still be deletable")
         assertFalse(key.value in persistence.memory.value, "the physical row should be gone")
     }
+
+    @Test
+    fun `disabled encryption stores plaintext and round-trips`() = runTest {
+        val persistence = PersistenceFake()
+        val store =
+            SnapshotStoreImpl(EncryptingPersistence(persistence, PlaintextSnapshotCipher), Json)
+        val key = "key".asKey()
+        val snapshot = newSnapshot(key)
+
+        store.set(key, snapshot)
+
+        assertEquals(Json.encodeToString(snapshot), persistence.memory.value.getValue(key.value))
+        assertEquals(snapshot, store.observe(key).firstOrNull())
+    }
+
+    @Test
+    fun `disabled encryption treats leftover ciphertext as absent`() = runTest {
+        val persistence = PersistenceFake()
+        val key = "key".asKey()
+        // A value written while encryption was enabled.
+        SnapshotStoreImpl(EncryptingPersistence(persistence, cipher()), Json)
+            .set(key, newSnapshot(key))
+
+        val store =
+            SnapshotStoreImpl(EncryptingPersistence(persistence, PlaintextSnapshotCipher), Json)
+
+        assertNull(store.observe(key).firstOrNull())
+    }
 }
 
 private fun newSnapshot(key: Key, state: String? = null): Snapshot {

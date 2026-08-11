@@ -26,6 +26,8 @@ import dev.lokksmith.client.snapshot.AesGcmSnapshotCipher
 import dev.lokksmith.client.snapshot.DataStorePersistence
 import dev.lokksmith.client.snapshot.EncryptingPersistence
 import dev.lokksmith.client.snapshot.EnvelopeDekProvider
+import dev.lokksmith.client.snapshot.PlaintextSnapshotCipher
+import dev.lokksmith.client.snapshot.SnapshotCipher
 import dev.lokksmith.client.snapshot.SnapshotStore
 import dev.lokksmith.client.snapshot.SnapshotStoreImpl
 import dev.lokksmith.crypto.KeyEnvelope
@@ -90,13 +92,17 @@ internal class ContainerImpl(
         )
     }
 
-    private val snapshotCipher by lazy {
-        val dekProvider =
-            EnvelopeDekProvider(
-                envelope = KeyEnvelope(platformContext, alias = persistenceBaseName),
-                wrappedStore = keyDataStore,
-            )
-        AesGcmSnapshotCipher { dekProvider.getOrCreateDek() }
+    private val snapshotCipher: SnapshotCipher by lazy {
+        if (!options.encryptionEnabled) {
+            PlaintextSnapshotCipher
+        } else {
+            val dekProvider =
+                EnvelopeDekProvider(
+                    envelope = KeyEnvelope(platformContext, alias = persistenceBaseName),
+                    wrappedStore = keyDataStore,
+                )
+            AesGcmSnapshotCipher { dekProvider.getOrCreateDek() }
+        }
     }
 
     override val snapshotStore by lazy {
